@@ -19,6 +19,7 @@ enum Mode {
     Insert
 }
 
+#[derive(Debug)]
 enum CommandType {
     Print,
     Quit
@@ -74,7 +75,52 @@ impl Editor {
     pub fn handle_line(&mut self, line: &str) {
         match self.mode {
             Mode::Command => {
-                self.parse_command(line);
+                //self.parse_command(line);
+                let line = line.trim_left();
+
+                //FIXME all this probably doesn't work on windows
+                //worry about it later
+                if line == "\n" {
+                    if self.current_line < self.line_buffer.len() {
+                        self.current_line += 1;
+                        println!("{}", self.line_buffer[self.current_line]);
+
+                        return;
+                    } else {
+                        //XXX error
+                        println!("?");
+
+                        return;
+                    }
+                } else if line.len() == 2 && line.char_at(0).is_alphabetic() {
+                    //FIXME damn girl string slices or chars pick one or the other
+                    let cmd = match CommandType::from_str(line.split_at(1).0) {
+                        Ok(cmd) => cmd,
+                        Err(_) => {
+                            //XXX error
+                            println!("?");
+                            return;
+                        }
+                    };
+
+                    println!("doing cmd {:?}", cmd);
+                    return;
+                }
+
+                let mut idx = 0;
+
+                while idx < line.len() {
+                    if line.char_at(idx).is_alphabetic()
+                    && (idx == 0 || line.char_at(idx - 1) != '\'') {
+                        break; //got command
+                    }
+                    idx += 1; 
+                }
+
+                let (addr, rest) = line.split_at(idx);
+                let (cmd, rest) = rest.split_at(1);
+
+                println!("addr {:?} cmd {:?} rest {:?}", addr, cmd, rest);
             },
             Mode::Insert => {
                 print!("inputting! {}", line);
@@ -85,17 +131,22 @@ impl Editor {
     fn parse_command(&mut self, line: &str) {
         let re = regex!(concat!(
             r"^\s*",            //leading whitespace
-            r"(?P<start_addr>[0-9]+|\.)?",    //first address
-            r"(?:,)?",          //comma
-            r"(?P<end_addr>[0-9]+|\.)?",    //second address
-            r"(?P<cmd>[a-zA-Z])?",     //command
-            r"(?P<rest>.+)?",           //rest
+            r"([0-9]+|\.)?",    //first address
+            r"(,|;)?",          //address seperator
+            r"([0-9]+|\.)?",    //second address
+            r"([a-zA-Z])?",     //command
+            r"(.+)?",           //rest
             r"[\n\r]*$"         //line terminator
         ));
         let caps = match re.captures(line) {
             Some(caps) => caps,
             None => return //FIXME parse error
         };
+
+        let start_addr = caps.at(1);
+        let end_addr = caps.at(2);
+        let cmd = caps.at(3);
+        let rest = caps.at(4);
 
         for cap in caps.iter() {
             println!("cap: {:?}", cap);
