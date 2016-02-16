@@ -1,9 +1,4 @@
-#![feature(plugin)]
-#![plugin(regex_macros)]
-
 #![feature(str_char)]
-
-extern crate regex;
 
 use std::env;
 use std::io;
@@ -12,7 +7,6 @@ use std::io::{BufRead, BufReader, Write};
 use std::fs::File;
 use std::collections::VecDeque;
 use std::str::FromStr;
-use regex::Regex;
 
 enum Mode {
     Command,
@@ -23,13 +17,6 @@ enum Mode {
 enum CommandType {
     Print,
     Quit
-}
-
-enum ParseMode {
-    StartAddress,
-    EndAddress,
-    Command,
-    Rest
 }
 
 impl FromStr for CommandType {
@@ -75,7 +62,6 @@ impl Editor {
     pub fn handle_line(&mut self, line: &str) {
         match self.mode {
             Mode::Command => {
-                //self.parse_command(line);
                 let line = line.trim_left();
 
                 //FIXME all this probably doesn't work on windows
@@ -126,82 +112,6 @@ impl Editor {
                 print!("inputting! {}", line);
             }
         }
-    }
-
-    fn parse_command(&mut self, line: &str) {
-        let re = regex!(concat!(
-            r"^\s*",            //leading whitespace
-            r"([0-9]+|\.)?",    //first address
-            r"(,|;)?",          //address seperator
-            r"([0-9]+|\.)?",    //second address
-            r"([a-zA-Z])?",     //command
-            r"(.+)?",           //rest
-            r"[\n\r]*$"         //line terminator
-        ));
-        let caps = match re.captures(line) {
-            Some(caps) => caps,
-            None => return //FIXME parse error
-        };
-
-        let start_addr = caps.at(1);
-        let end_addr = caps.at(2);
-        let cmd = caps.at(3);
-        let rest = caps.at(4);
-
-        for cap in caps.iter() {
-            println!("cap: {:?}", cap);
-        }
-/*
-        let mut parse_mode = ParseMode::StartAddress;
-        //FIXME I should be using str slices, fix it _after_ it works tho
-        let mut start_address = String::new();
-        let mut end_address = String::new();
-        let mut command = String::new();
-        let mut rest = String::new();
-
-        for c in line.chars() {
-            if c == '\n' {
-                return;
-            }
-
-            if parse_mode == ParseMode::StartAddress {
-                match c {
-                    ',' => {
-                        parse_mode = ParseMode::EndAddress;
-                        continue;
-                    },
-            }
-        }
-
-        //let mut start_address = -1;
-        //let mut end_address = -1;
-        let mut idx = 0;
-        println!("{}", line.len());
-        while idx < line.len() && !line.char_at(idx).is_alphabetic() {
-            println!("checking: {}", line.char_at(idx));
-
-            idx += 1;
-        }
-        println!("{}", line.len());
-
-        let (addr, cmd, rest) = if idx < line.len() {
-            let (addr, rest) = line.split_at(idx);
-            let (cmd, rest) = rest.split_at(1);
-
-            (addr, cmd, rest)
-        } else {
-            return; //TODO parse error
-        };
-        
-        println!("{:?} - {:?} - {:?}" , addr, cmd, rest);
-
-        let cmd_type = CommandType::from_str(line).unwrap();
-
-        match cmd_type {
-            CommandType::Print => println!("printing~"),
-            CommandType::Quit => process::exit(0)
-        }
-*/
     }
 }
 
