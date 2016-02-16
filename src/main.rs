@@ -78,19 +78,21 @@ impl Editor {
 
                         return;
                     }
-                } else if line.len() == 2 && line.char_at(0).is_alphabetic() {
-                    //FIXME damn girl string slices or chars pick one or the other
-                    let cmd = match CommandType::from_str(line.split_at(1).0) {
-                        Ok(cmd) => cmd,
-                        Err(_) => {
-                            //XXX error
-                            println!("?");
-                            return;
-                        }
-                    };
+                } else if line.len() == 2 {
+                    if line.char_at(0).is_alphabetic() {
+                        //FIXME damn girl string slices or chars pick one or the other
+                        let cmd = match CommandType::from_str(line.split_at(1).0) {
+                            Ok(cmd) => cmd,
+                            Err(_) => {
+                                //XXX error
+                                println!("?");
+                                return;
+                            }
+                        };
 
-                    println!("doing cmd {:?}", cmd);
-                    return;
+                        println!("doing cmd {:?}", cmd);
+                        return;
+                    }
                 }
 
                 let mut idx = 0;
@@ -100,7 +102,13 @@ impl Editor {
                     && (idx == 0 || line.char_at(idx - 1) != '\'') {
                         break; //got command
                     }
+
                     idx += 1; 
+                }
+
+                //no command letter found, parse as address
+                if idx == line.len() {
+                    let (start_addr, end_addr) = self.parse_address(&(line.split_at(line.len() - 1)));
                 }
 
                 let (addr, rest) = line.split_at(idx);
@@ -112,6 +120,24 @@ impl Editor {
                 print!("inputting! {}", line);
             }
         }
+    }
+
+    fn parse_address(&mut self, addr: &str) -> (isize, isize) {
+        let chars = addr.chars().peekable();
+        let mut start = 0;
+        let mut end = 0;
+
+        let mut idx = 0;
+        while idx < addr.len() {
+            if addr.char_at(idx) == ',' {
+            } else if addr.char_at(idx) == ';' {
+            }
+
+            idx += 1;
+        }
+
+        //no seperator
+
     }
 }
 
