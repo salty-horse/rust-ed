@@ -1,4 +1,9 @@
+#![feature(plugin)]
+#![plugin(regex_macros)]
+
 #![feature(str_char)]
+
+extern crate regex;
 
 use std::env;
 use std::io;
@@ -7,6 +12,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::fs::File;
 use std::collections::VecDeque;
 use std::str::FromStr;
+use regex::Regex;
 
 enum Mode {
     Command,
@@ -16,6 +22,13 @@ enum Mode {
 enum CommandType {
     Print,
     Quit
+}
+
+enum ParseMode {
+    StartAddress,
+    EndAddress,
+    Command,
+    Rest
 }
 
 impl FromStr for CommandType {
@@ -70,9 +83,44 @@ impl Editor {
     }
 
     fn parse_command(&mut self, line: &str) {
-        //FIXME this just strips off the \n, not really safe
-        let (line, _) = line.split_at(line.len() - 1);
-        let line = line.trim_left();
+        let re = regex!(concat!(
+            r"^\s*",            //leading whitespace
+            r"(?P<start_addr>[0-9]+|\.)?",    //first address
+            r"(?:,)?",          //comma
+            r"(?P<end_addr>[0-9]+|\.)?",    //second address
+            r"(?P<cmd>[a-zA-Z])?",     //command
+            r"(?P<rest>.+)?",           //rest
+            r"[\n\r]*$"         //line terminator
+        ));
+        let caps = match re.captures(line) {
+            Some(caps) => caps,
+            None => return //FIXME parse error
+        };
+
+        for cap in caps.iter() {
+            println!("cap: {:?}", cap);
+        }
+/*
+        let mut parse_mode = ParseMode::StartAddress;
+        //FIXME I should be using str slices, fix it _after_ it works tho
+        let mut start_address = String::new();
+        let mut end_address = String::new();
+        let mut command = String::new();
+        let mut rest = String::new();
+
+        for c in line.chars() {
+            if c == '\n' {
+                return;
+            }
+
+            if parse_mode == ParseMode::StartAddress {
+                match c {
+                    ',' => {
+                        parse_mode = ParseMode::EndAddress;
+                        continue;
+                    },
+            }
+        }
 
         //let mut start_address = -1;
         //let mut end_address = -1;
@@ -96,7 +144,6 @@ impl Editor {
         
         println!("{:?} - {:?} - {:?}" , addr, cmd, rest);
 
-/*
         let cmd_type = CommandType::from_str(line).unwrap();
 
         match cmd_type {
