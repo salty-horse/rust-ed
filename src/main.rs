@@ -62,6 +62,28 @@ impl Editor {
     pub fn handle_line(&mut self, line: &str) {
         match self.mode {
             Mode::Command => {
+                let mut address_mode = true;
+                let mut mark_mode = false;
+
+                let mut left_addr = 0;
+                let mut right_addr = 0;
+
+                let mut p_flag = false;
+                let mut n_flag = false;
+                let mut l_flag = false;
+
+                let chars = line.trim_left().chars().peekable();
+
+            },
+            Mode::Insert => {
+            }
+        }
+    }
+
+    //old version
+    pub fn handle_line(&mut self, line: &str) {
+        match self.mode {
+            Mode::Command => {
                 let line = line.trim_left();
 
                 //FIXME all this probably doesn't work on windows
