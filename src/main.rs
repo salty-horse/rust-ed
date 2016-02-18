@@ -38,7 +38,14 @@ impl FromStr for CommandType {
 struct Editor {
     mode: Mode,
     line_buffer: VecDeque<String>,
-    current_line: usize, //0-index
+    //PROTIP this is 1-indexed!!!
+    //that means always everywhere use it naturally
+    //and always/only decrement for direct vec access
+    //and $ is line_buffer.len(), NOT len-1
+    //this meshes nicely with ed semantics as well
+    //because something like 0i is meaningful
+    //while 0p is nonsense
+    current_line: usize
 }
 
 impl Editor {
@@ -54,7 +61,7 @@ impl Editor {
             self.line_buffer.push_back(l);
         }
 
-        self.current_line = self.line_buffer.len() - 1;
+        self.current_line = self.line_buffer.len();
 
         self
     }
@@ -62,8 +69,8 @@ impl Editor {
     pub fn handle_line(&mut self, line: &str) {
         match self.mode {
             Mode::Command => {
-                let mut address_mode = true;
-                let mut mark_mode = false;
+                let mut addr_mode = true;
+                let mut addr_offset_mode = false;
 
                 let mut left_addr = 0;
                 let mut right_addr = 0;
@@ -72,14 +79,78 @@ impl Editor {
                 let mut n_flag = false;
                 let mut l_flag = false;
 
-                let chars = line.trim_left().chars().peekable();
+                //FIXME address must handle arbitrary whitespace
+                let mut chars = line.trim_left().chars().peekable();
 
+                //address base
+                match chars.peek() {
+                    Some(&'.') => {
+                        chars.next();
+                        right_addr = self.current_line;
+                    },
+                    Some(&'$') => {
+                        chars.next();
+                        right_addr = self.line_buffer.len();
+                    },
+                    Some(&'%') | Some(&',') => {
+                        chars.next();
+                        left_addr = 1;
+                        right_addr = self.line_buffer.len();
+                    },
+                    Some(n) if n.is_digit(10) => {
+                        chars.next();
+                        let mut num = (*n as isize);
+
+                        loop {
+                            match chars.peek() {
+                                Some(n) if n.is_digit(10) => {
+                                    chars.next();
+                                    num = num * 10 + (*n as isize);
+                                },
+                                Some(_) => break,
+                                None => panic!("this shouldn't happen")
+                            }
+                        }
+
+                        //FIXME is all this isize/usize stuff sane
+                        //annoying bc I was usize for array access
+                        //but need signed int for < 0 during (but never after) math
+                        //or... rearrange so that never matters? hm
+                        if num < 1 || (num as usize) > self.line_buffer.len() {
+                            panic!("return error");
+                        }
+
+                        right_addr = num as usize;
+                    },
+                    Some(&'\'') => {
+                        chars.next();
+                        match chars.next() {
+                            Some(c) if c.is_alphabetic() => panic!("todo: marks"),
+                            Some(_) | None => panic!("return error")
+                        }
+                    },
+                    Some(&'/') | Some(&'?') => panic!("todo: regex mode"),
+                    Some(_) => { ;},
+                    None => panic!("this shouldn't happen")
+                }
+                
+                println!("left: {}, right: {}", left_addr, right_addr);
+
+                addr_offset_mode = true;
+/* come back to this tmrw
+                while addr_offset_mode {
+                    match chars.peek() {
+                        Some(
+                    }
+                }
+*/
             },
             Mode::Insert => {
             }
         }
     }
 
+/*
     //old version
     pub fn handle_line(&mut self, line: &str) {
         match self.mode {
@@ -161,6 +232,7 @@ impl Editor {
         //no seperator
 
     }
+*/
 }
 
 impl Default for Editor {
@@ -185,6 +257,10 @@ fn main() {
     };
 
     loop {
+        if ed.current_line < 1 {
+            panic!("current line is {}--something has gone horribly wrong", ed.current_line);
+        }
+
         input.clear();
         print!(":");
         stdout.lock().flush();
