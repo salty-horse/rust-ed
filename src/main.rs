@@ -83,23 +83,24 @@ impl Editor {
                 let mut chars = line.trim_left().chars().peekable();
 
                 //address base
-                match chars.peek() {
-                    Some(&'.') => {
+                //let p = chars.next();
+                match *(chars.peek().unwrap()) {
+                    '.' => {
                         chars.next();
                         right_addr = self.current_line;
                     },
-                    Some(&'$') => {
+                    '$' => {
                         chars.next();
                         right_addr = self.line_buffer.len();
                     },
-                    Some(&'%') | Some(&',') => {
+                    '%' | ',' => {
                         chars.next();
                         left_addr = 1;
                         right_addr = self.line_buffer.len();
                     },
-                    Some(n) if n.is_digit(10) => {
+                    n if n.is_digit(10) => {
                         chars.next();
-                        let mut num = (*n as isize);
+                        let mut num = n as isize;
 
                         loop {
                             match chars.peek() {
@@ -122,16 +123,21 @@ impl Editor {
 
                         right_addr = num as usize;
                     },
-                    Some(&'\'') => {
+                    '\'' => {
                         chars.next();
-                        match chars.next() {
-                            Some(c) if c.is_alphabetic() => panic!("todo: marks"),
-                            Some(_) | None => panic!("return error")
+                        let c = chars.next();
+                        if c.is_some() {
+                            let c = c.unwrap();
+                            if c.is_alphabetic() {
+                                panic!("todo: marks");
+                            } else {
+                                panic!("return error");
+                            }
                         }
                     },
-                    Some(&'/') | Some(&'?') => panic!("todo: regex mode"),
-                    Some(_) => { ;},
-                    None => panic!("this shouldn't happen")
+                    '/' | '?' => panic!("todo: regex mode"),
+                    _ => { ;},
+                    //None => panic!("this shouldn't happen")
                 }
                 
                 println!("left: {}, right: {}", left_addr, right_addr);
