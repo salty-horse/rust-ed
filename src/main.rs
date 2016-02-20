@@ -83,8 +83,14 @@ impl Editor {
                 let mut chars = line.trim_left().chars().peekable();
 
                 //address base
-                //let p = chars.next();
-                match *(chars.peek().unwrap()) {
+                //FIXME this is dumb but I am tired
+                let c = if chars.peek().is_some() {
+                    *(chars.peek().unwrap())
+                } else {
+                    panic!("this shouldn't happen")
+                };
+                    
+                match c {
                     '.' => {
                         chars.next();
                         right_addr = self.current_line;
@@ -98,18 +104,27 @@ impl Editor {
                         left_addr = 1;
                         right_addr = self.line_buffer.len();
                     },
+                    //this entire arm is cringe-inducing
                     n if n.is_digit(10) => {
                         chars.next();
-                        let mut num = n as isize;
+                        let mut num = n.to_digit(10).unwrap() as isize;
 
                         loop {
-                            match chars.peek() {
-                                Some(n) if n.is_digit(10) => {
+                            println!("n: {}, num: {}", n, num);
+                            //FIXME this is dumb
+                            let n = if chars.peek().is_some() {
+                                *(chars.peek().unwrap())
+                            } else {
+                                panic!("this shouldn't happen")
+                            };
+
+                            match n {
+                                n if n.is_digit(10) => {
                                     chars.next();
-                                    num = num * 10 + (*n as isize);
+                                    num = num * 10 + (n.to_digit(10).unwrap() as isize);
                                 },
-                                Some(_) => break,
-                                None => panic!("this shouldn't happen")
+                                _ => break,
+                                //None => panic!("this shouldn't happen")
                             }
                         }
 
@@ -118,6 +133,7 @@ impl Editor {
                         //but need signed int for < 0 during (but never after) math
                         //or... rearrange so that never matters? hm
                         if num < 1 || (num as usize) > self.line_buffer.len() {
+                            println!("num is {}", num);
                             panic!("return error");
                         }
 
