@@ -69,6 +69,23 @@ impl Editor {
     pub fn handle_line(&mut self, line: &str) {
         match self.mode {
             Mode::Command => {
+/*
+                //find last char of address
+                let mut idx = 0;
+                for c in line.chars() {
+                    if is_command(c) || c =='\n' {
+                        break;
+                    } else {
+                        idx += 1;
+                    }
+                }
+
+                //handle trivial but weird edge cases, otherwise parse
+                let (left_addr, right_addr) = if idx == 0 {
+                    (self.current_line, self.current_line)
+                } else if 
+*/
+
                 let mut addr_mode = true;
                 let mut addr_offset_mode = false;
 
@@ -104,7 +121,7 @@ impl Editor {
                         left_addr = 1;
                         right_addr = self.line_buffer.len();
                     },
-                    //this entire arm is cringe-inducing
+                    //FIXME this entire arm is cringe-inducing
                     n if n.is_digit(10) => {
                         chars.next();
                         let mut num = n.to_digit(10).unwrap() as isize;
@@ -181,6 +198,11 @@ impl Default for Editor {
             current_line: 1,
         }
     }
+}
+
+//FIXME actually switch on the specific chars that are commands?
+fn is_command(c: char) -> bool {
+    c.is_alphabetic() || c == '='
 }
 
 fn main() {
