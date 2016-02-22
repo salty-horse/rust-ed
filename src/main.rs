@@ -65,14 +65,49 @@ impl Editor {
     pub fn handle_line(&mut self, line: &str) {
         match self.mode {
             Mode::Command => {
-                let addrs = self.parse_addr(line);
+                let (addrs, idx) = match self.parse_addr(line) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        //TODO return to something so printing is done in one place
+                        println!("?");
+                        return;
+                    }
+                };
+
+                //TODO use the cute enum thingie for this
+                //also TODO TODO TODO this (cmd impls) is where to pick up tomorrow
+                //buuut for tmrw FIXME this goes oob on stuff like .\n for some reason
+                //something in the parser with i incrementing is screwy
+                match line.char_at(idx) {
+                    'p' => {
+                        //XXX FIXME don't actually use this for real
+                        //I just wanna see it work before I sleep lol
+                        let (left, right) = match addrs {
+                            Some(t) => t,
+                            None => (self.current_line, self.current_line)
+                        };
+
+                        if left <= 0 {
+                            println!("?");
+                            return;
+                        }
+
+                        for i in (left-1)..right {
+                            println!("{}", self.line_buffer[i]);
+                        }
+                    },
+                    _ => {
+                        println!("zzz sleep");
+                    }
+                }
             },
             Mode::Insert => {
             }
         }
     }
 
-    fn parse_addr(&mut self, line: &str) -> Result<(Option<(isize,isize)>,usize),&str> {
+    //option tuple is addresses if any, usize is the *next index to read*, not the last read
+    fn parse_addr(&mut self, line: &str) -> Result<(Option<(usize,usize)>,usize),&str> {
         //FIXME I use isize because addresses can _temporarily_ go negative
         //eg -5000+5001 is perfectly valid
         //this shooouldn't cause problems... unless you have a file with > 2bn lines?
@@ -218,7 +253,7 @@ impl Editor {
             i += 1;
         } //end address parsing
 
-        println!("left: {}, right: {}, addrs: {}", left_addr, right_addr, addrs);
+        //println!("left: {}, right: {}, addrs: {}, i: {}", left_addr, right_addr, addrs, i);
 
         //validate
         if addrs > 0 {
@@ -234,12 +269,14 @@ impl Editor {
         }
 
         //return
+        //FIXME this type shit I'm doing is dumb ugh lol
+        //do this cleaner
         if addrs == 0 {
             Ok((None, i))
         } else if addrs == 1 {
-            Ok((Some((right_addr, right_addr)), i))
+            Ok((Some((right_addr as usize, right_addr as usize)), i))
         } else {
-            Ok((Some((left_addr, right_addr)), i))
+            Ok((Some((left_addr as usize, right_addr as usize)), i))
         }
     }
 }
