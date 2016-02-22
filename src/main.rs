@@ -1,8 +1,6 @@
 #![feature(str_char)]
 
-use std::env;
 use std::io;
-use std::process;
 use std::io::{BufRead, BufReader, Write};
 use std::fs::File;
 use std::collections::VecDeque;
@@ -67,144 +65,181 @@ impl Editor {
     pub fn handle_line(&mut self, line: &str) {
         match self.mode {
             Mode::Command => {
-                //various commands have their own default addresses
-                //but 0 is valid input in some cases
-                //so -1 communicates nil unambiguously
-                //FIXME wait shit no it doesn't
-                //weh think about how to fix w/o even more bools
-                //I don't think rust lets you check if uninitialized sigh
-                let mut left_addr: isize = -1;
-                let mut right_addr: isize = -1;
-                let mut curr_addr: isize = self.current_line as isize;
-                let mut expect_tail = false;
-
-                //address parse loop
-                //TODO put this in a function
-                let mut i = 0;
-                while i < line.len() {
-                    let c = line.char_at(i);
-
-                    //ignore spacing, break on end of address
-                    if c == ' ' || c == '\t' {
-                        continue;
-                    } else if is_command(c) || c == '\n' {
-                        break;
-                    }
-                    
-                    match c {
-                        '\n' | _ if is_command(c) => break,
-                        //'\n' => break,
-                        ' ' | '\t' => continue,
-                        '.' => {
-                            if expect_tail {
-                                panic!("return error");
-                            } else {
-                                left_addr = right_addr;
-                                right_addr = curr_addr;
-                                expect_tail = true;
-                            }
-                        },
-                        '$' => {
-                            if expect_tail {
-                                panic!("return error");
-                            } else {
-                                left_addr = right_addr;
-                                right_addr = self.line_buffer.len() as isize;
-                                expect_tail = true;
-                            }
-                        },
-                        //like 1,$
-                        '%' => {
-                            if expect_tail {
-                                panic!("return error");
-                            } else {
-                                left_addr = 1;
-                                right_addr = self.line_buffer.len() as isize;
-                                expect_tail = true;
-                            }
-                        },
-                        ',' => {
-                            //if true, delimiter. else like 1,$
-                            if expect_tail {
-                                expect_tail = false;
-                            } else {
-                                left_addr = 1;
-                                right_addr = self.line_buffer.len() as isize;
-                                expect_tail = true;
-                            }
-                        },
-                        //FIXME this entire arm is cringe-inducing
-                        n if n.is_digit(10) => {
-
-                            let mut num = n.to_digit(10).unwrap() as isize;
-
-                            //FIXME in C this would be a simple test on an assignment in parens
-                            //look into while let, maybe that is what that is for
-                            while line.char_at(i+1).is_digit(10) {
-                                i += 1;
-                                num = num * 10 + (line.char_at(i).to_digit(10).unwrap() as isize);
-                            }
-
-                            //if true, positive offset. else assignment
-                            //in both cases don't check validity until the end
-                            //something like 1-500+500 is valid
-                            if expect_tail {
-                                right_addr += num;
-                            } else {
-                                left_addr = right_addr;
-                                right_addr = num;
-                                expect_tail = true;
-                            }
-                        },
-                        s if s == '+' || s == '-' => {
-                            let sign = if s == '+' {1} else {-1};
-
-                            //after the +/- increment past whitespace
-                            while (line.char_at(i+1) == ' ' || line.char_at(i+1) == '\t') {
-                                i += 1;
-                            }
-
-                            //now get number that may or may not follow the +/-
-                            //bool is necessary because +0 is valid
-                            //but if there's no num we act like +1
-                            let mut num = 0;
-                            let mut got_num = false;
-                            while line.char_at(i+1).is_digit(10) {
-                                i += 1;
-                                num = num * 10 + (line.char_at(i).to_digit(10).unwrap() as isize);
-                                got_num = true;
-                            }
-
-                            num = if got_num {num * sign} else {1};
-
-                            //similar to with number match
-                            if expect_tail {
-                                right_addr += num;
-                            } else {
-                                left_addr = right_addr;
-                                right_addr = curr_addr;
-                                expect_tail = true;
-                            }
-                        },
-                        '\'' => {
-                            if line.char_at(i+1).is_alphabetic() {
-                                i += 1;
-                                panic!("todo: marks");
-                            } else {
-                                panic!("return error");
-                            }
-                        },
-                        '/' | '?' => panic!("todo: regex mode"),
-                        _ => { ;},
-                    }
-                
-                    i += 1;
-                } //end address parsing
-
-                println!("left: {}, right: {}", left_addr, right_addr);
+                let addrs = self.parse_addr(line);
             },
             Mode::Insert => {
             }
+        }
+    }
+
+    fn parse_addr(&mut self, line: &str) -> Result<(Option<(isize,isize)>,usize),&str> {
+        //FIXME I use isize because addresses can _temporarily_ go negative
+        //eg -5000+5001 is perfectly valid
+        //this shooouldn't cause problems... unless you have a file with > 2bn lines?
+        let mut addrs = 0;
+        let mut left_addr: isize = 0;
+        let mut right_addr: isize = 0;
+        let mut curr_addr: isize = self.current_line as isize;
+        let mut expect_tail = false;
+
+        //address parse loop
+        //TODO put this in a function
+        let mut i = 0;
+        while i < line.len() {
+            let c = line.char_at(i);
+
+            match c {
+                '\n' | _ if is_command(c) => break,
+                ' ' | '\t' => {
+                    i +=1;
+                    continue;
+                },
+                '.' => {
+                    if expect_tail {
+                        return Err("nope");
+                    } else {
+                        left_addr = right_addr;
+                        right_addr = curr_addr;
+                        expect_tail = true;
+                        addrs += 1;
+                    }
+                },
+                '$' => {
+                    if expect_tail {
+                        return Err("nope");
+                    } else {
+                        left_addr = right_addr;
+                        right_addr = self.line_buffer.len() as isize;
+                        expect_tail = true;
+                        addrs += 1;
+                    }
+                },
+                //like 1,$
+                '%' => {
+                    if expect_tail {
+                        return Err("nope");
+                    } else {
+                        left_addr = 1;
+                        right_addr = self.line_buffer.len() as isize;
+                        expect_tail = true;
+                        addrs += 2;
+                    }
+                },
+                ',' => {
+                    //if true, delimiter. else like 1,$
+                    if expect_tail {
+                        expect_tail = false;
+                    } else {
+                        left_addr = 1;
+                        right_addr = self.line_buffer.len() as isize;
+                        expect_tail = true;
+                        addrs += 2;
+                    }
+                },
+                ';' => {
+                    //if true, delimiter. else like .,$
+                    if expect_tail {
+                        curr_addr = right_addr;
+                        expect_tail = false;
+                    } else {
+                        left_addr = curr_addr;
+                        right_addr = self.line_buffer.len() as isize;
+                        expect_tail = true;
+                        addrs += 2;
+                    }
+                },
+                //FIXME this entire arm is cringe-inducing
+                n if n.is_digit(10) => {
+
+                    let mut num = n.to_digit(10).unwrap() as isize;
+
+                    //FIXME in C this would be a simple test on an assignment in parens
+                    //look into while let, maybe that is what that is for
+                    while line.char_at(i+1).is_digit(10) {
+                        i += 1;
+                        num = num * 10 + (line.char_at(i).to_digit(10).unwrap() as isize);
+                    }
+
+                    //if true, positive offset. else assignment
+                    //in both cases don't check validity until the end
+                    //something like 1-500+500 is valid
+                    if expect_tail {
+                        right_addr += num;
+                    } else {
+                        left_addr = right_addr;
+                        right_addr = num;
+                        expect_tail = true;
+                        addrs += 1;
+                    }
+                },
+                s if s == '+' || s == '-' => {
+                    let sign = if s == '+' {1} else {-1};
+
+                    //after the +/- increment past whitespace
+                    while line.char_at(i+1) == ' ' || line.char_at(i+1) == '\t' {
+                        i += 1;
+                    }
+
+                    //now get number that may or may not follow the +/-
+                    //bool is necessary because +0 is valid
+                    //but if there's no num we act like +1
+                    let mut num = 0;
+                    let mut got_num = false;
+                    while line.char_at(i+1).is_digit(10) {
+                        i += 1;
+                        num = num * 10 + (line.char_at(i).to_digit(10).unwrap() as isize);
+                        got_num = true;
+                    }
+
+                    num = if got_num {num * sign} else {sign};
+
+                    //similar to with number match
+                    if expect_tail {
+                        right_addr += num;
+                    } else {
+                        left_addr = right_addr;
+                        right_addr = curr_addr + num;
+                        expect_tail = true;
+                        addrs += 1;
+                    }
+                },
+                '\'' => {
+                    if line.char_at(i+1).is_alphabetic() {
+                        i += 1;
+                        panic!("todo: marks");
+                    } else {
+                        return Err("nope");
+                    }
+                },
+                '/' | '?' => panic!("todo: regex mode"),
+                _ => { ;},
+            }
+        
+            i += 1;
+        } //end address parsing
+
+        println!("left: {}, right: {}, addrs: {}", left_addr, right_addr, addrs);
+
+        //validate
+        if addrs > 0 {
+            //negative is always an error, 0 is valid in some contexts
+            if right_addr < 0 || (right_addr as usize) > self.line_buffer.len() {
+                return Err("nope");
+            }
+        }
+        if addrs > 1 {
+            if left_addr < 0 || (left_addr as usize) > self.line_buffer.len() || left_addr > right_addr {
+                return Err("nope");
+            }
+        }
+
+        //return
+        if addrs == 0 {
+            Ok((None, i))
+        } else if addrs == 1 {
+            Ok((Some((right_addr, right_addr)), i))
+        } else {
+            Ok((Some((left_addr, right_addr)), i))
         }
     }
 }
@@ -230,10 +265,14 @@ fn main() {
     let mut stdout = io::stdout();
     let input = &mut String::new();
 
+/*
     match env::args().nth(1) {
         Some(arg) => ed.load(&arg),
         None => &mut ed //FIXME find out the right way to do this lol
     };
+*/
+    ed.load("./testfile");
+    println!("(loaded testfile)");
 
     loop {
         if ed.current_line < 1 {
