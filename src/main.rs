@@ -49,7 +49,7 @@ struct Editor {
 }
 
 impl Editor {
-    pub fn load(&mut self, path: &str) -> &mut Editor {
+    pub fn load(&mut self, path: &str) {
         let f = match File::open(path) {
             Ok(file) => file,
             Err(_) => panic!("bad file bro")
@@ -62,33 +62,11 @@ impl Editor {
         }
 
         self.current_line = self.line_buffer.len();
-
-        self
     }
 
     pub fn handle_line(&mut self, line: &str) {
         match self.mode {
             Mode::Command => {
-/*
-                //find last char of address
-                let mut idx = 0;
-                for c in line.chars() {
-                    if is_command(c) || c =='\n' {
-                        break;
-                    } else {
-                        idx += 1;
-                    }
-                }
-
-                //handle trivial but weird edge cases, otherwise parse
-                let (left_addr, right_addr) = if idx == 0 {
-                    (self.current_line, self.current_line)
-                } else if 
-*/
-
-                let mut addr_mode = true;
-                let mut addr_offset_mode = false;
-
                 //various commands have their own default addresses
                 //but 0 is valid input in some cases
                 //so -1 communicates nil unambiguously
@@ -100,6 +78,8 @@ impl Editor {
                 let mut curr_addr: isize = self.current_line as isize;
                 let mut expect_tail = false;
 
+                //address parse loop
+                //TODO put this in a function
                 let mut i = 0;
                 while i < line.len() {
                     let c = line.char_at(i);
@@ -179,8 +159,7 @@ impl Editor {
                         s if s == '+' || s == '-' => {
                             let sign = if s == '+' {1} else {-1};
 
-                            //FIXME ughhhh this is so ugly
-                            //but, after the +/- increment past whitespace
+                            //after the +/- increment past whitespace
                             while (line.char_at(i+1) == ' ' || line.char_at(i+1) == '\t') {
                                 i += 1;
                             }
@@ -220,16 +199,7 @@ impl Editor {
                     }
                 
                     i += 1;
-
-                addr_offset_mode = true;
-/* come back to this tmrw
-                while addr_offset_mode {
-                    match chars.peek() {
-                        Some(
-                    }
-                }
-*/
-                }
+                } //end address parsing
 
                 println!("left: {}, right: {}", left_addr, right_addr);
             },
