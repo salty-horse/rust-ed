@@ -124,7 +124,8 @@ impl Editor {
             let c = line.char_at(i);
 
             match c {
-                '\n' | _ if is_command(c) => break,
+                 _ if is_command(c) => break,
+                '\n'  => break,
                 ' ' | '\t' => {
                     i +=1;
                     continue;
