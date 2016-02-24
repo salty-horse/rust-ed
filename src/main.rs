@@ -3,7 +3,8 @@
 use std::io;
 use std::io::{BufRead, BufReader, Write};
 use std::fs::File;
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashMap};
+use std::collections::hash_map;
 use std::str::FromStr;
 
 enum Mode {
@@ -43,6 +44,7 @@ struct Editor {
     //this meshes nicely with ed semantics as well
     //because something like 0i is meaningful
     //while 0p is nonsense
+    mark_hash: HashMap<char, usize>,
     current_line: usize
 }
 
@@ -222,11 +224,31 @@ impl Editor {
                     }
                 },
                 '\'' => {
-                    if line.char_at(i+1).is_alphabetic() {
-                        i += 1;
-                        panic!("todo: marks");
-                    } else {
+                    if expect_tail {
                         return Err(());
+                    } else {
+                        let m = line.char_at(i+1);
+
+                        if m.is_alphabetic() && m.is_lowercase() {
+                            i += 1;
+
+                            match self.mark_hash.get(&m) {
+                                //sanity check
+                                Some(l) => {
+                                    if *l > 0 && *l <= self.line_buffer.len() {
+                                        left_addr = right_addr;
+                                        right_addr = *l as isize;
+                                        expect_tail = true;
+                                        addrs += 1;
+                                    } else {
+                                        return Err(());
+                                    }
+                                },
+                                None => return Err(())
+                            }
+                        } else {
+                            return Err(());
+                        }
                     }
                 },
                 '/' | '?' => panic!("todo: regex mode"),
@@ -310,6 +332,15 @@ impl Editor {
                     left - 1
                 };
 
+                let kv = self.mark_hash.clone().into_iter();
+                for (k, v) in kv {
+                    for i in left..(right + 1) {
+                        if v == i {
+                            self.mark_hash.remove(&k);
+                        }
+                    }
+                }
+
                 Ok(())
             },
             'i' => {
@@ -326,6 +357,24 @@ impl Editor {
                 Ok(())
             },
             //NOTE when I do join 1,1j is a noop but not an error
+            'k' => {
+                let (_, right) = match addrs {
+                    Some(t) => t,
+                    None => (0, self.current_line)
+                };
+
+                if right <= 0 {
+                    return Err(());
+                }
+
+                println!("inserting {}", line.char_at(1));
+                self.mark_hash.insert(line.char_at(1), right);
+                println!("hash: {:?}", self.mark_hash);
+
+                self.current_line = right;
+
+                Ok(())
+            },
             'p' => {
                 let (left, right) = match addrs {
                     Some(t) => t,
@@ -370,6 +419,7 @@ impl Default for Editor {
     fn default() -> Editor {
         Editor {
             mode: Mode::Command,
+            mark_hash: HashMap::with_capacity(26),
             line_buffer: VecDeque::new(),
             current_line: 1,
         }
