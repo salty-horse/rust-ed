@@ -74,30 +74,12 @@ impl Editor {
                     }
                 };
 
-                //TODO use the cute enum thingie for this
-                //also TODO TODO TODO this (cmd impls) is where to pick up tomorrow
-                //buuut for tmrw FIXME this goes oob on stuff like .\n for some reason
-                //something in the parser with i incrementing is screwy
-                match line.char_at(idx) {
-                    'p' => {
-                        //XXX FIXME don't actually use this for real
-                        //I just wanna see it work before I sleep lol
-                        let (left, right) = match addrs {
-                            Some(t) => t,
-                            None => (self.current_line, self.current_line)
-                        };
-
-                        if left <= 0 {
-                            println!("?");
-                            return;
-                        }
-
-                        for i in (left-1)..right {
-                            println!("{}", self.line_buffer[i]);
-                        }
-                    },
-                    _ => {
-                        println!("zzz sleep");
+                //TODO Result<(),()> atm but make it useful later imo
+                match self.parse_command(&line[idx..line.len()], addrs) {
+                    Ok(_) => (),
+                    Err(_) => {
+                        println!("?");
+                        return;
                     }
                 }
             },
@@ -107,7 +89,7 @@ impl Editor {
     }
 
     //option tuple is addresses if any, usize is the *next index to read*, not the last read
-    fn parse_addr(&mut self, line: &str) -> Result<(Option<(usize,usize)>,usize),&str> {
+    fn parse_addr(&mut self, line: &str) -> Result<(Option<(usize,usize)>,usize), ()> {
         //FIXME I use isize because addresses can _temporarily_ go negative
         //eg -5000+5001 is perfectly valid
         //this shooouldn't cause problems... unless you have a file with > 2bn lines?
@@ -132,7 +114,7 @@ impl Editor {
                 },
                 '.' => {
                     if expect_tail {
-                        return Err("nope");
+                        return Err(());
                     } else {
                         left_addr = right_addr;
                         right_addr = curr_addr;
@@ -142,7 +124,7 @@ impl Editor {
                 },
                 '$' => {
                     if expect_tail {
-                        return Err("nope");
+                        return Err(());
                     } else {
                         left_addr = right_addr;
                         right_addr = self.line_buffer.len() as isize;
@@ -153,7 +135,7 @@ impl Editor {
                 //like 1,$
                 '%' => {
                     if expect_tail {
-                        return Err("nope");
+                        return Err(());
                     } else {
                         left_addr = 1;
                         right_addr = self.line_buffer.len() as isize;
@@ -244,7 +226,7 @@ impl Editor {
                         i += 1;
                         panic!("todo: marks");
                     } else {
-                        return Err("nope");
+                        return Err(());
                     }
                 },
                 '/' | '?' => panic!("todo: regex mode"),
@@ -260,12 +242,12 @@ impl Editor {
         if addrs > 0 {
             //negative is always an error, 0 is valid in some contexts
             if right_addr < 0 || (right_addr as usize) > self.line_buffer.len() {
-                return Err("nope");
+                return Err(());
             }
         }
         if addrs > 1 {
             if left_addr < 0 || (left_addr as usize) > self.line_buffer.len() || left_addr > right_addr {
-                return Err("nope");
+                return Err(());
             }
         }
 
@@ -278,6 +260,108 @@ impl Editor {
             Ok((Some((right_addr as usize, right_addr as usize)), i))
         } else {
             Ok((Some((left_addr as usize, right_addr as usize)), i))
+        }
+    }
+
+    fn parse_command(&mut self, line: &str, addrs: Option<(usize, usize)>) -> Result<(), ()> {
+        //FIXME I was going to use an enum for commands but
+        //it didn't seem to accomplish anything and just doubled the boilerplate
+        //enumerating and/or modularizing funxtionality would be desirable
+        //but maybe wait till we have code to divvy up before worrying
+        //it _would_ be nice to like, link functions to enums or smth tho
+        //
+        //anyway until I actually split up functionality...
+        //most commands should follow the same basic format
+        // * match out addrs and set defaults if needed
+        // * error out if 0 and 0 is invalid for that command
+        // * apply whatever functionality to the line or lines
+        // * set the new current line
+        //if I did this right the addresses are already bounds-checked
+        match line.char_at(0) {
+            'd' => {
+                let (left, right) = match addrs {
+                    Some(t) => t,
+                    None => (self.current_line, self.current_line)
+                };
+
+                if left <= 0 {
+                    return Err(());
+                }
+
+                if left == right {
+                    self.line_buffer.remove(right - 1);
+                } else {
+                    self.line_buffer.drain((left - 1)..right);
+                }
+
+                //set line to line after deleted range if exists
+                //else to line before
+                //we use left here because eg: 2,5d
+                //what was line 6 (index 5) is now line 2 (index 1)
+                //so we set current to 2. otoh: 2,$d
+                //line 1 (index 0) is all that remains so left-1
+                //FIXME FIXME and suddenly I realize none of my code can deal with an empty linebuffer
+                //then again in ed proper seems anything not insertion fails w/ empty buffer
+                self.current_line = if self.line_buffer.len() == 0 {
+                    1
+                } else if self.line_buffer.len() >= left {
+                    left
+                } else {
+                    left - 1
+                };
+
+                Ok(())
+            },
+            'i' => {
+                let (_, right) = match addrs {
+                    Some(t) => t,
+                    None => (0, self.current_line)
+                };
+
+                //TODO self.mode = Command::Insert;
+                println!("TODO insert");
+
+                self.current_line = right;
+
+                Ok(())
+            },
+            //NOTE when I do join 1,1j is a noop but not an error
+            'p' => {
+                let (left, right) = match addrs {
+                    Some(t) => t,
+                    None => (self.current_line, self.current_line)
+                };
+
+                if left <= 0 {
+                    return Err(());
+                }
+
+                for i in (left - 1)..right {
+                    println!("{}", self.line_buffer[i]);
+                }
+
+                self.current_line = right;
+
+                Ok(())
+            },
+            '\n' => {
+                //FIXME I hate this 0 is there anything like _ to use ugh
+                let (_, right) = match addrs {
+                    Some(t) => t,
+                    None => (0, self.current_line)
+                };
+
+                println!("{}", self.line_buffer[right - 1]);
+
+                self.current_line = right;
+
+                Ok(())
+            },
+            _ => {
+                println!("zzz sleep");
+
+                Ok(())
+            }
         }
     }
 }
