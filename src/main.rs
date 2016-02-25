@@ -7,36 +7,10 @@ use std::collections::{VecDeque, HashMap};
 use std::collections::hash_map;
 use std::str::FromStr;
 
-enum Mode {
-    Command,
-    Insert
-}
-
-#[derive(Debug)]
-enum CommandType {
-    Print,
-    Quit
-}
-
-impl FromStr for CommandType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<CommandType, ()> {
-        match &*s {
-            "p" => Ok(CommandType::Print),
-            "q" => Ok(CommandType::Quit),
-            //TODO replace with helpful messages like "?"
-            x  => {
-                println!("bad cmd: {:?}", x);
-                Err(())
-            }
-        }
-    }
-}
-
 struct Editor {
     mode: Mode,
     line_buffer: VecDeque<String>,
+    mark_hash: HashMap<char, usize>,
     //PROTIP this is 1-indexed!!!
     //that means always everywhere use it naturally
     //and always/only decrement for direct vec access
@@ -44,7 +18,6 @@ struct Editor {
     //this meshes nicely with ed semantics as well
     //because something like 0i is meaningful
     //while 0p is nonsense
-    mark_hash: HashMap<char, usize>,
     current_line: usize
 }
 
@@ -258,8 +231,6 @@ impl Editor {
             i += 1;
         } //end address parsing
 
-        //println!("left: {}, right: {}, addrs: {}, i: {}", left_addr, right_addr, addrs, i);
-
         //validate
         if addrs > 0 {
             //negative is always an error, 0 is valid in some contexts
@@ -367,9 +338,7 @@ impl Editor {
                     return Err(());
                 }
 
-                println!("inserting {}", line.char_at(1));
                 self.mark_hash.insert(line.char_at(1), right);
-                println!("hash: {:?}", self.mark_hash);
 
                 self.current_line = right;
 
