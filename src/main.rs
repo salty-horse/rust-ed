@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 enum Mode {
     Command,
-    Insert
+    Append
 }
 
 struct Editor {
@@ -63,7 +63,29 @@ impl Editor {
                     }
                 }
             },
-            Mode::Insert => {
+            Mode::Append => {
+                if line == ".\n" {
+                    self.mode = Mode::Command;
+                    if self.current_line == 0 {
+                        self.current_line = 1;
+                    }
+                } else {
+                    //TODO if this is slow for large buffers mb collect and do all at once
+                    //note because current_line is 1-indexed this appends after line
+                    //
+                    //also NOTE
+                    //I strip off newlines because that's what rust's load by lines thing does
+                    //and it seems reasonable to just add the \n to every line again when saving
+                    //but perhaps it makes sense to preseve them and just suppress on print
+                    //(also fwiw I am strongly in favor of \n as line *terminator* not *seperator*
+                    //
+                    //also also NOTE
+                    //windows \n\r garbage throws a wrench in this but idc rn
+                    //get it working on normal oses first then worry about silly exceptions
+                    //guess long-term just write a macro, closest we got to ifdefs here
+                    self.line_buffer.insert(self.current_line, line[0..line.len()-1].to_owned());
+                    self.current_line += 1;
+                }
             }
         }
     }
@@ -276,6 +298,22 @@ impl Editor {
         // * set the new current line
         //if I did this right the addresses are already bounds-checked
         match line.char_at(0) {
+            'a' => {
+                let (_, right) = match addrs {
+                    Some(t) => t,
+                    None => (0, self.current_line)
+                };
+
+                self.mode = Mode::Append;
+
+                self.current_line = right;
+
+                Ok(())
+            },
+            //FIXME ok uh
+            //I should probably refactor a lil before this zzz
+            //otherwise it is like literally "copy paste all of d and all of a"
+            //'c' => { },
             'd' => {
                 let (left, right) = match addrs {
                     Some(t) => t,
@@ -325,9 +363,13 @@ impl Editor {
                     None => (0, self.current_line)
                 };
 
-                self.mode = Command::Insert;
+                self.mode = Mode::Append;
 
-                self.current_line = right;
+                if right == 0 {
+                    self.current_line = 0;
+                } else {
+                    self.current_line = right - 1;
+                }
 
                 Ok(())
             },
@@ -420,7 +462,7 @@ fn main() {
     println!("(loaded testfile)");
 
     loop {
-        if ed.current_line < 1 {
+        if ed.current_line < 0 {
             panic!("current line is {}--something has gone horribly wrong", ed.current_line);
         }
 
