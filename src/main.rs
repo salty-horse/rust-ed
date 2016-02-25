@@ -7,6 +7,11 @@ use std::collections::{VecDeque, HashMap};
 use std::collections::hash_map;
 use std::str::FromStr;
 
+enum Mode {
+    Command,
+    Insert
+}
+
 struct Editor {
     mode: Mode,
     line_buffer: VecDeque<String>,
@@ -320,8 +325,7 @@ impl Editor {
                     None => (0, self.current_line)
                 };
 
-                //TODO self.mode = Command::Insert;
-                println!("TODO insert");
+                self.mode = Command::Insert;
 
                 self.current_line = right;
 
