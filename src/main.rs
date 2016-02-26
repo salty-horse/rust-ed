@@ -18,26 +18,48 @@ struct Marks {
 
 impl Marks {
     //init
-    pub fn new(&mut self) -> Marks {
-        self.hashmap = HashMap::with_capacity(26);
+    pub fn new() -> Marks {
+        let marks = Marks { hashmap: HashMap::with_capacity(26) };
 
-        return self;
+        return marks;
     }
 
     //set mark c for line l
-    pub fn set(&mut self, c: char, l: usize) {
+    pub fn insert(&mut self, c: char, l: usize) {
+        self.hashmap.insert(c, l);
     }
 
-    pub fn get(&mut self, c: &char) -> Option<usize> {
-        hashmap.get(c)
+    pub fn get(&mut self, c: &char) -> Option<&usize> {
+        self.hashmap.get(c)
     }
 
-    //increment all marks after line l
-    pub fn add_line(&mut self, l: usize) {
+    //increment all marks after inserted line
+    pub fn add_line(&mut self, right: usize) {
+        //this is a dumb hack but I think it is correct
+        let right = if right == 0 {1} else {right};
+        let kv = self.hashmap.clone().into_iter();
+
+        for (k, v) in kv {
+            if v >= right {
+                self.hashmap.insert(k, v + 1);
+            }
+        }
     }
 
-    //delete marks on line l and decrement all after
-    pub fn del_line(&mut self, l: usize) {
+    //delete marks on lines in range and decrease all after
+    pub fn del_lines(&mut self, left: usize, right: usize) {
+        //3,5d this is 3
+        //so a mark on 6 shifts to 3
+        let diff = right - left + 1;
+        let kv = self.hashmap.clone().into_iter();
+
+        for (k, v) in kv {
+            if v > right {
+                self.hashmap.insert(k, v - diff);
+            } else if v >= left && v <= right {
+                self.hashmap.remove(&k);
+            }
+        }
     }
 }
 
@@ -55,8 +77,8 @@ struct Editor {
     current_line: usize
 }
 
-impl Default for Editor {
-    fn default() -> Editor {
+impl Editor {
+    pub fn new() -> Editor {
         Editor {
             mode: Mode::Command,
             marks: Marks::new(),
@@ -64,9 +86,7 @@ impl Default for Editor {
             current_line: 1,
         }
     }
-}
 
-impl Editor {
     pub fn load(&mut self, path: &str) {
         let f = match File::open(path) {
             Ok(file) => file,
@@ -125,6 +145,7 @@ impl Editor {
                     //guess long-term just write a macro, closest we got to ifdefs here
                     self.line_buffer.insert(self.current_line, line[0..line.len()-1].to_owned());
                     self.current_line += 1;
+                    self.marks.add_line(self.current_line);
                 }
             }
         }
@@ -382,14 +403,7 @@ impl Editor {
                     left - 1
                 };
 
-                let kv = self.mark_hash.clone().into_iter();
-                for (k, v) in kv {
-                    for i in left..(right + 1) {
-                        if v == i {
-                            self.mark_hash.remove(&k);
-                        }
-                    }
-                }
+                self.marks.del_lines(left, right);
 
                 Ok(())
             },
@@ -420,7 +434,12 @@ impl Editor {
                     return Err(());
                 }
 
-                self.mark_hash.insert(line.char_at(1), right);
+                let m = line.char_at(1);
+                if m.is_alphabetic() && m.is_lowercase() {
+                    self.marks.insert(m, right);
+                } else {
+                    return Err(());
+                }
 
                 self.current_line = right;
 
@@ -476,7 +495,7 @@ fn is_command(c: char) -> bool {
 }
 
 fn main() {
-    let mut ed = Editor { ..Default::default() };
+    let mut ed = Editor::new();
     let mut stdin = io::stdin();
     let mut stdout = io::stdout();
     let input = &mut String::new();
