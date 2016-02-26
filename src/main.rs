@@ -286,7 +286,7 @@ impl Editor {
                     } else {
                         let m = line.char_at(i+1);
 
-                        if m.is_alphabetic() && m.is_lowercase() {
+                        if 'a' <= m && m <= 'z' {
                             i += 1;
 
                             match self.marks.get(&m) {
@@ -435,7 +435,7 @@ impl Editor {
                 }
 
                 let m = line.char_at(1);
-                if m.is_alphabetic() && m.is_lowercase() {
+                if 'a' <= m && m <= 'z' {
                     self.marks.insert(m, right);
                 } else {
                     return Err(());
