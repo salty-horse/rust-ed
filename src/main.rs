@@ -12,10 +12,39 @@ enum Mode {
     Append
 }
 
+struct Marks {
+    hashmap: HashMap<char, usize>
+}
+
+impl Marks {
+    //init
+    pub fn new(&mut self) -> Marks {
+        self.hashmap = HashMap::with_capacity(26);
+
+        return self;
+    }
+
+    //set mark c for line l
+    pub fn set(&mut self, c: char, l: usize) {
+    }
+
+    pub fn get(&mut self, c: &char) -> Option<usize> {
+        hashmap.get(c)
+    }
+
+    //increment all marks after line l
+    pub fn add_line(&mut self, l: usize) {
+    }
+
+    //delete marks on line l and decrement all after
+    pub fn del_line(&mut self, l: usize) {
+    }
+}
+
 struct Editor {
     mode: Mode,
     line_buffer: VecDeque<String>,
-    mark_hash: HashMap<char, usize>,
+    marks: Marks,
     //PROTIP this is 1-indexed!!!
     //that means always everywhere use it naturally
     //and always/only decrement for direct vec access
@@ -24,6 +53,17 @@ struct Editor {
     //because something like 0i is meaningful
     //while 0p is nonsense
     current_line: usize
+}
+
+impl Default for Editor {
+    fn default() -> Editor {
+        Editor {
+            mode: Mode::Command,
+            marks: Marks::new(),
+            line_buffer: VecDeque::new(),
+            current_line: 1,
+        }
+    }
 }
 
 impl Editor {
@@ -92,7 +132,7 @@ impl Editor {
 
     //option tuple is addresses if any, usize is the *next index to read*, not the last read
     fn parse_addr(&mut self, line: &str) -> Result<(Option<(usize,usize)>,usize), ()> {
-        //FIXME I use isize because addresses can _temporarily_ go negative
+        //I use isize because addresses can _temporarily_ go negative
         //eg -5000+5001 is perfectly valid
         //this shooouldn't cause problems... unless you have a file with > 2bn lines?
         let mut addrs = 0;
@@ -101,8 +141,7 @@ impl Editor {
         let mut curr_addr: isize = self.current_line as isize;
         let mut expect_tail = false;
 
-        //address parse loop
-        //TODO put this in a function
+        //parse loop
         let mut i = 0;
         while i < line.len() {
             let c = line.char_at(i);
@@ -170,11 +209,8 @@ impl Editor {
                 },
                 //FIXME this entire arm is cringe-inducing
                 n if n.is_digit(10) => {
-
                     let mut num = n.to_digit(10).unwrap() as isize;
 
-                    //FIXME in C this would be a simple test on an assignment in parens
-                    //look into while let, maybe that is what that is for
                     while line.char_at(i+1).is_digit(10) {
                         i += 1;
                         num = num * 10 + (line.char_at(i).to_digit(10).unwrap() as isize);
@@ -232,7 +268,7 @@ impl Editor {
                         if m.is_alphabetic() && m.is_lowercase() {
                             i += 1;
 
-                            match self.mark_hash.get(&m) {
+                            match self.marks.get(&m) {
                                 //sanity check
                                 Some(l) => {
                                     if *l > 0 && *l <= self.line_buffer.len() {
@@ -286,7 +322,7 @@ impl Editor {
     fn parse_command(&mut self, line: &str, addrs: Option<(usize, usize)>) -> Result<(), ()> {
         //FIXME I was going to use an enum for commands but
         //it didn't seem to accomplish anything and just doubled the boilerplate
-        //enumerating and/or modularizing funxtionality would be desirable
+        //enumerating and/or modularizing functionality would be desirable
         //but maybe wait till we have code to divvy up before worrying
         //it _would_ be nice to like, link functions to enums or smth tho
         //
@@ -430,17 +466,6 @@ impl Editor {
 
                 Ok(())
             }
-        }
-    }
-}
-
-impl Default for Editor {
-    fn default() -> Editor {
-        Editor {
-            mode: Mode::Command,
-            mark_hash: HashMap::with_capacity(26),
-            line_buffer: VecDeque::new(),
-            current_line: 1,
         }
     }
 }
