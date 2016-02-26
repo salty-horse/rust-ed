@@ -4,8 +4,6 @@ use std::io;
 use std::io::{BufRead, BufReader, Write};
 use std::fs::File;
 use std::collections::{VecDeque, HashMap};
-use std::collections::hash_map;
-use std::str::FromStr;
 
 // Error messages
 static ERROR_INVALID_ADDRESS : &'static str = "Invalid address";
@@ -102,7 +100,7 @@ impl Editor {
             Err(_) => panic!("bad file bro")
         };
 
-        let mut file = BufReader::new(&f);
+        let file = BufReader::new(&f);
         for line in file.lines() {
             let l = line.unwrap();
             self.line_buffer.push_back(l);
@@ -529,8 +527,8 @@ fn is_command(c: char) -> bool {
 
 fn main() {
     let mut ed = Editor::new();
-    let mut stdin = io::stdin();
-    let mut stdout = io::stdout();
+    let stdin = io::stdin();
+    let stdout = io::stdout();
     let input = &mut String::new();
 
 /*
