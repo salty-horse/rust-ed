@@ -64,11 +64,11 @@ impl Editor {
                 }
             },
             Mode::Append => {
+                //TODO test commands at addr 0 properly
+                //I'd written everything assuming this would set it back to 1 if 0
+                //but turns out that leaving it is the correct behavior
                 if line == ".\n" {
                     self.mode = Mode::Command;
-                    if self.current_line == 0 {
-                        self.current_line = 1;
-                    }
                 } else {
                     //TODO if this is slow for large buffers mb collect and do all at once
                     //note because current_line is 1-indexed this appends after line
@@ -409,11 +409,15 @@ impl Editor {
                 Ok(())
             },
             '\n' => {
-                //FIXME I hate this 0 is there anything like _ to use ugh
+                //NOTE newline with no addr is equiv to +1p
                 let (_, right) = match addrs {
                     Some(t) => t,
-                    None => (0, self.current_line)
+                    None => (0, self.current_line + 1)
                 };
+
+                if right <= 0 || right > self.line_buffer.len() {
+                    return Err(());
+                }
 
                 println!("{}", self.line_buffer[right - 1]);
 
