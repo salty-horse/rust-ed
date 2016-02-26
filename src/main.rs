@@ -7,6 +7,11 @@ use std::collections::{VecDeque, HashMap};
 use std::collections::hash_map;
 use std::str::FromStr;
 
+// Error messages
+static ERROR_INVALID_ADDRESS : &'static str = "Invalid address";
+static ERROR_UNEXPECTED_ADDRESS : &'static str = "Unexpected address";
+static ERROR_INVALID_MARK : &'static str = "Invalid mark character";
+
 enum Mode {
     Command,
     Append
@@ -74,7 +79,9 @@ struct Editor {
     //this meshes nicely with ed semantics as well
     //because something like 0i is meaningful
     //while 0p is nonsense
-    current_line: usize
+    current_line: usize,
+    help_mode: bool,
+    latest_error: &'static str,
 }
 
 impl Editor {
@@ -84,6 +91,8 @@ impl Editor {
             marks: Marks::new(),
             line_buffer: VecDeque::new(),
             current_line: 1,
+            help_mode: false,
+            latest_error: "",
         }
     }
 
@@ -108,8 +117,7 @@ impl Editor {
                 let (addrs, idx) = match self.parse_addr(line) {
                     Ok(r) => r,
                     Err(e) => {
-                        //TODO return to something so printing is done in one place
-                        println!("?");
+                        self.handle_error(e);
                         return;
                     }
                 };
@@ -117,8 +125,8 @@ impl Editor {
                 //TODO Result<(),()> atm but make it useful later imo
                 match self.parse_command(&line[idx..line.len()], addrs) {
                     Ok(_) => (),
-                    Err(_) => {
-                        println!("?");
+                    Err(e) => {
+                        self.handle_error(e);
                         return;
                     }
                 }
@@ -151,8 +159,16 @@ impl Editor {
         }
     }
 
+    fn handle_error(&mut self, e: &'static str) {
+        self.latest_error = e;
+        println!("?");
+        if self.help_mode {
+            println!("{}", e);
+        }
+    }
+
     //option tuple is addresses if any, usize is the *next index to read*, not the last read
-    fn parse_addr(&mut self, line: &str) -> Result<(Option<(usize,usize)>,usize), ()> {
+    fn parse_addr(&mut self, line: &str) -> Result<(Option<(usize, usize)>, usize), &'static str> {
         //I use isize because addresses can _temporarily_ go negative
         //eg -5000+5001 is perfectly valid
         //this shooouldn't cause problems... unless you have a file with > 2bn lines?
@@ -176,7 +192,7 @@ impl Editor {
                 },
                 '.' => {
                     if expect_tail {
-                        return Err(());
+                        return Err(ERROR_INVALID_ADDRESS);
                     } else {
                         left_addr = right_addr;
                         right_addr = curr_addr;
@@ -186,7 +202,7 @@ impl Editor {
                 },
                 '$' => {
                     if expect_tail {
-                        return Err(());
+                        return Err(ERROR_INVALID_ADDRESS);
                     } else {
                         left_addr = right_addr;
                         right_addr = self.line_buffer.len() as isize;
@@ -197,7 +213,7 @@ impl Editor {
                 //like 1,$
                 '%' => {
                     if expect_tail {
-                        return Err(());
+                        return Err(ERROR_INVALID_ADDRESS);
                     } else {
                         left_addr = 1;
                         right_addr = self.line_buffer.len() as isize;
@@ -282,7 +298,7 @@ impl Editor {
                 },
                 '\'' => {
                     if expect_tail {
-                        return Err(());
+                        return Err(ERROR_INVALID_ADDRESS);
                     } else {
                         let m = line.char_at(i+1);
 
@@ -298,13 +314,13 @@ impl Editor {
                                         expect_tail = true;
                                         addrs += 1;
                                     } else {
-                                        return Err(());
+                                        return Err(ERROR_INVALID_ADDRESS);
                                     }
                                 },
-                                None => return Err(())
+                                None => return Err(ERROR_INVALID_ADDRESS)
                             }
                         } else {
-                            return Err(());
+                            return Err(ERROR_INVALID_MARK);
                         }
                     }
                 },
@@ -319,12 +335,12 @@ impl Editor {
         if addrs > 0 {
             //negative is always an error, 0 is valid in some contexts
             if right_addr < 0 || (right_addr as usize) > self.line_buffer.len() {
-                return Err(());
+                return Err(ERROR_INVALID_ADDRESS);
             }
         }
         if addrs > 1 {
             if left_addr < 0 || (left_addr as usize) > self.line_buffer.len() || left_addr > right_addr {
-                return Err(());
+                return Err(ERROR_INVALID_ADDRESS);
             }
         }
 
@@ -340,7 +356,7 @@ impl Editor {
         }
     }
 
-    fn parse_command(&mut self, line: &str, addrs: Option<(usize, usize)>) -> Result<(), ()> {
+    fn parse_command(&mut self, line: &str, addrs: Option<(usize, usize)>) -> Result<(), &'static str> {
         //FIXME I was going to use an enum for commands but
         //it didn't seem to accomplish anything and just doubled the boilerplate
         //enumerating and/or modularizing functionality would be desirable
@@ -378,7 +394,7 @@ impl Editor {
                 };
 
                 if left <= 0 {
-                    return Err(());
+                    return Err(ERROR_INVALID_ADDRESS);
                 }
 
                 if left == right {
@@ -407,6 +423,25 @@ impl Editor {
 
                 Ok(())
             },
+            'H' => {
+                if addrs.is_some() {
+                    return Err(ERROR_UNEXPECTED_ADDRESS);
+                }
+                self.help_mode = !self.help_mode;
+                if self.help_mode && !self.latest_error.is_empty() {
+                    println!("{}", self.latest_error);
+                }
+                Ok(())
+            }
+            'h' => {
+                if addrs.is_some() {
+                    return Err(ERROR_UNEXPECTED_ADDRESS);
+                }
+                if !self.latest_error.is_empty() {
+                    println!("{}", self.latest_error);
+                }
+                Ok(())
+            }
             'i' => {
                 let (_, right) = match addrs {
                     Some(t) => t,
@@ -431,14 +466,14 @@ impl Editor {
                 };
 
                 if right <= 0 {
-                    return Err(());
+                    return Err(ERROR_INVALID_ADDRESS);
                 }
 
                 let m = line.char_at(1);
                 if m.is_alphabetic() && m.is_lowercase() {
                     self.marks.insert(m, right);
                 } else {
-                    return Err(());
+                    return Err(ERROR_INVALID_MARK);
                 }
 
                 self.current_line = right;
@@ -452,7 +487,7 @@ impl Editor {
                 };
 
                 if left <= 0 {
-                    return Err(());
+                    return Err(ERROR_INVALID_ADDRESS);
                 }
 
                 for i in (left - 1)..right {
@@ -471,7 +506,7 @@ impl Editor {
                 };
 
                 if right <= 0 || right > self.line_buffer.len() {
-                    return Err(());
+                    return Err(ERROR_INVALID_ADDRESS);
                 }
 
                 println!("{}", self.line_buffer[right - 1]);
@@ -481,9 +516,7 @@ impl Editor {
                 Ok(())
             },
             _ => {
-                println!("zzz sleep");
-
-                Ok(())
+                Err("Unknown command")
             }
         }
     }
