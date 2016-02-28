@@ -7,6 +7,7 @@ use std::collections::{VecDeque, HashMap};
 use std::collections::hash_map;
 use std::str::FromStr;
 
+#[derive(PartialEq)]
 enum Mode {
     Command,
     Append
@@ -515,7 +516,9 @@ fn main() {
         }
 
         input.clear();
-        print!(":");
+        if ed.mode == Mode::Command {
+            print!(":");
+        }
         stdout.lock().flush();
 
         stdin.read_line(input);
