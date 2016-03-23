@@ -3,12 +3,13 @@
 use std::{fmt, io};
 use std::io::{BufRead, BufReader, Write};
 use std::fs::File;
-use std::collections::{VecDeque, HashMap};
+use std::collections::VecDeque;
 
 // Error messages
 static ERROR_INVALID_ADDRESS : &'static str = "Invalid address";
 static ERROR_UNEXPECTED_ADDRESS : &'static str = "Unexpected address";
 static ERROR_INVALID_MARK : &'static str = "Invalid mark character";
+static ERROR_INVALID_SUFFIX : &'static str = "Invalid command suffix";
 
 #[derive(PartialEq)]
 enum Mode {
@@ -394,6 +395,15 @@ impl Editor {
         //if I did this right the addresses are already bounds-checked
         match line.char_at(0) {
             'a' => {
+                //FIXME zzz so something like `apln`
+                //will hold onto the flags and print the last appended line
+                //I guess TODO I can just make the enum take those as args actually
+                //since it processes the . it's a sensible way to handle it
+                let (l_flag, n_flag, p_flag) = match self.consume_rest(&line[1..line.len()]) {
+                    Ok(t) => t,
+                    Err(e) => return Err(e)
+                };
+
                 let (_, right) = match addrs {
                     Some(t) => t,
                     None => (0, self.current_line)
@@ -542,6 +552,24 @@ impl Editor {
             }
         }
     }
+
+    fn consume_rest(&mut self, line: &str) -> Result<(bool, bool, bool), &'static str> {
+        let mut l = false;
+        let mut n = false;
+        let mut p = false;
+
+        for i in 0..line.len() {
+            match line.char_at(i) {
+                'l' => l = true,
+                'n' => n = true,
+                'p' => p = true,
+                '\n' => (),
+                _ => return Err(ERROR_INVALID_SUFFIX)
+            }
+        }
+
+        Ok((l, n, p))
+    }
 }
 
 //FIXME actually switch on the specific chars that are commands?
@@ -565,10 +593,6 @@ fn main() {
     println!("(loaded testfile)");
 
     loop {
-        if ed.current_line < 0 {
-            panic!("current line is {}--something has gone horribly wrong", ed.current_line);
-        }
-
         input.clear();
         if ed.mode == Mode::Command {
             print!(":");
