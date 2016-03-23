@@ -1,9 +1,9 @@
 #![feature(str_char)]
 
-use std::io;
+use std::{fmt, io};
 use std::io::{BufRead, BufReader, Write};
 use std::fs::File;
-use std::collections::{VecDeque, HashMap};
+use std::collections::VecDeque;
 use std::collections::hash_map;
 use std::str::FromStr;
 
@@ -14,35 +14,43 @@ enum Mode {
 }
 
 struct Marks {
-    hashmap: HashMap<char, usize>
+    array: [Option<usize>; 26]
 }
 
 impl Marks {
     //init
     pub fn new() -> Marks {
-        let marks = Marks { hashmap: HashMap::with_capacity(26) };
+        Marks { array: [None; 26] }
+    }
 
-        return marks;
+    fn get_ix(c: char) -> usize {
+        (c as usize) - ('a' as usize)
     }
 
     //set mark c for line l
     pub fn insert(&mut self, c: char, l: usize) {
-        self.hashmap.insert(c, l);
+        assert!('a' <= c && c <= 'z');
+        self.array[Marks::get_ix(c)] = Some(l);
     }
 
-    pub fn get(&mut self, c: &char) -> Option<&usize> {
-        self.hashmap.get(c)
+    pub fn get(&mut self, c: char) -> Option<usize> {
+        assert!('a' <= c && c <= 'z');
+        self.array[Marks::get_ix(c)]
     }
 
     //increment all marks after inserted line
     pub fn add_line(&mut self, right: usize) {
         //this is a dumb hack but I think it is correct
         let right = if right == 0 {1} else {right};
-        let kv = self.hashmap.clone().into_iter();
 
-        for (k, v) in kv {
-            if v >= right {
-                self.hashmap.insert(k, v + 1);
+        for m in self.array.iter_mut() {
+            match *m {
+                Some(v) => {
+                    if v >= right {
+                        *m = Some(v + 1);
+                    }
+                },
+                None => {},
             }
         }
     }
@@ -52,15 +60,30 @@ impl Marks {
         //3,5d this is 3
         //so a mark on 6 shifts to 3
         let diff = right - left + 1;
-        let kv = self.hashmap.clone().into_iter();
 
-        for (k, v) in kv {
-            if v > right {
-                self.hashmap.insert(k, v - diff);
-            } else if v >= left && v <= right {
-                self.hashmap.remove(&k);
+        for m in self.array.iter_mut() {
+            match *m {
+                Some(v) => {
+                    if v > right {
+                        *m = Some(v - diff);
+                    } else if v >= left && v <= right {
+                        *m = None;
+                    }
+                },
+                None => {},
             }
         }
+    }
+}
+
+impl fmt::Debug for Marks {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_map().entries(self.array.iter().enumerate().filter_map(
+            |(i, m)| match *m {
+                Some(v) => Some(((('a' as u8) + i as u8) as char, v)),
+                None => None,
+            }
+        )).finish()
     }
 }
 
@@ -290,12 +313,12 @@ impl Editor {
                         if 'a' <= m && m <= 'z' {
                             i += 1;
 
-                            match self.marks.get(&m) {
+                            match self.marks.get(m) {
                                 //sanity check
                                 Some(l) => {
-                                    if *l > 0 && *l <= self.line_buffer.len() {
+                                    if l > 0 && l <= self.line_buffer.len() {
                                         left_addr = right_addr;
-                                        right_addr = *l as isize;
+                                        right_addr = l as isize;
                                         expect_tail = true;
                                         addrs += 1;
                                     } else {
