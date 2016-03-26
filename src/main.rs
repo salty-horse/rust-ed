@@ -11,12 +11,6 @@ static ERROR_UNEXPECTED_ADDRESS : &'static str = "Unexpected address";
 static ERROR_INVALID_MARK : &'static str = "Invalid mark character";
 static ERROR_INVALID_SUFFIX : &'static str = "Invalid command suffix";
 
-#[derive(PartialEq)]
-enum Mode {
-    Command,
-    Append
-}
-
 struct Marks {
     array: [Option<usize>; 26]
 }
@@ -43,15 +37,12 @@ impl Marks {
     }
 
     //increment all marks after inserted line
-    pub fn add_line(&mut self, right: usize) {
-        //this is a dumb hack but I think it is correct
-        let right = if right == 0 {1} else {right};
-
+    pub fn add_lines(&mut self, start_line: usize, n: usize) {
         for m in self.array.iter_mut() {
             match *m {
                 Some(v) => {
-                    if v >= right {
-                        *m = Some(v + 1);
+                    if v >= start_line {
+                        *m = Some(v + n);
                     }
                 },
                 None => {},
@@ -92,7 +83,6 @@ impl fmt::Debug for Marks {
 }
 
 struct Editor {
-    mode: Mode,
     line_buffer: VecDeque<String>,
     marks: Marks,
     //PROTIP this is 1-indexed!!!
@@ -110,7 +100,6 @@ struct Editor {
 impl Editor {
     pub fn new() -> Editor {
         Editor {
-            mode: Mode::Command,
             marks: Marks::new(),
             line_buffer: VecDeque::new(),
             current_line: 1,
@@ -135,50 +124,69 @@ impl Editor {
     }
 
     pub fn handle_line(&mut self, line: &str) {
-        match self.mode {
-            Mode::Command => {
-                let (addrs, idx) = match self.parse_addr(line) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        self.handle_error(e);
-                        return;
-                    }
-                };
-
-                //TODO Result<(),()> atm but make it useful later imo
-                match self.parse_command(&line[idx..line.len()], addrs) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        self.handle_error(e);
-                        return;
-                    }
-                }
-            },
-            Mode::Append => {
-                //TODO test commands at addr 0 properly
-                //I'd written everything assuming this would set it back to 1 if 0
-                //but turns out that leaving it is the correct behavior
-                if line == ".\n" {
-                    self.mode = Mode::Command;
-                } else {
-                    //TODO if this is slow for large buffers mb collect and do all at once
-                    //note because current_line is 1-indexed this appends after line
-                    //
-                    //also NOTE
-                    //I strip off newlines because that's what rust's load by lines thing does
-                    //and it seems reasonable to just add the \n to every line again when saving
-                    //but perhaps it makes sense to preseve them and just suppress on print
-                    //(also fwiw I am strongly in favor of \n as line *terminator* not *seperator*
-                    //
-                    //also also NOTE
-                    //windows \n\r garbage throws a wrench in this but idc rn
-                    //get it working on normal oses first then worry about silly exceptions
-                    //guess long-term just write a macro, closest we got to ifdefs here
-                    self.line_buffer.insert(self.current_line, line[0..line.len()-1].to_owned());
-                    self.current_line += 1;
-                    self.marks.add_line(self.current_line);
-                }
+        let (addrs, idx) = match self.parse_addr(line) {
+            Ok(r) => r,
+            Err(e) => {
+                self.handle_error(e);
+                return;
             }
+        };
+
+        //TODO Result<(),()> atm but make it useful later imo
+        match self.parse_command(&line[idx..line.len()], addrs) {
+            Ok(_) => (),
+            Err(e) => {
+                self.handle_error(e);
+                return;
+            }
+        }
+    }
+
+    fn read_input_lines(&mut self, addressed_line: usize, is_insert: bool) {
+        let stdin = io::stdin();
+        let line = &mut String::new();
+        let mut lines_read: usize = 0;
+
+        let start_line: usize =
+            if is_insert {
+                if addressed_line == 0 {
+                    1
+                } else {
+                    addressed_line - 1
+                }
+            } else {
+                addressed_line
+            };
+
+        loop {
+            line.clear();
+            stdin.read_line(line);
+            if line == ".\n" {
+                break;
+            }
+
+            //TODO if this is slow for large buffers mb collect and do all at once
+            //note because current_line is 1-indexed this appends after line
+            //
+            //also NOTE
+            //I strip off newlines because that's what rust's load by lines thing does
+            //and it seems reasonable to just add the \n to every line again when saving
+            //but perhaps it makes sense to preseve them and just suppress on print
+            //(also fwiw I am strongly in favor of \n as line *terminator* not *seperator*
+            //
+            //also also NOTE
+            //windows \n\r garbage throws a wrench in this but idc rn
+            //get it working on normal oses first then worry about silly exceptions
+            //guess long-term just write a macro, closest we got to ifdefs here
+            self.line_buffer.insert(start_line + lines_read, line[0..line.len()-1].to_owned());
+            lines_read += 1;
+        }
+
+        if lines_read == 0 {
+            self.current_line = addressed_line;
+        } else {
+            self.current_line = start_line + lines_read;
+            self.marks.add_lines(start_line + 1, lines_read);
         }
     }
 
@@ -409,9 +417,7 @@ impl Editor {
                     None => (0, self.current_line)
                 };
 
-                self.mode = Mode::Append;
-
-                self.current_line = right;
+                self.read_input_lines(right, false);
 
                 Ok(())
             },
@@ -480,13 +486,7 @@ impl Editor {
                     None => (0, self.current_line)
                 };
 
-                self.mode = Mode::Append;
-
-                if right == 0 {
-                    self.current_line = 0;
-                } else {
-                    self.current_line = right - 1;
-                }
+                self.read_input_lines(right, true);
 
                 Ok(())
             },
@@ -594,9 +594,7 @@ fn main() {
 
     loop {
         input.clear();
-        if ed.mode == Mode::Command {
-            print!(":");
-        }
+        print!(":");
         stdout.lock().flush();
 
         stdin.read_line(input);
