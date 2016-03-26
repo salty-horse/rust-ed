@@ -161,7 +161,7 @@ impl Editor {
         loop {
             line.clear();
             stdin.read_line(line);
-            if line == ".\n" {
+            if line == ".\n" || !line.ends_with("\n") {
                 break;
             }
 
@@ -598,6 +598,10 @@ fn main() {
         stdout.lock().flush();
 
         stdin.read_line(input);
+        if !input.ends_with("\n") {
+            input.clear();
+            input.push_str("q\n");
+        }
         ed.handle_line(&input);
     }
 }
